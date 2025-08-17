@@ -1,0 +1,29 @@
+{
+  "name": "Custom Roblox Background",
+  "description": "With this you can change Roblox Background",
+  "version": "2.0",
+  "manifest_version": 3,
+  "icons": {
+    "128": "gay.jpg"
+  },
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": [
+    "https://cdn.discordapp.com/*",
+    "https://media.discordapp.net/*",
+    "https://images-ext-2.discordapp.net/*",
+    "https://i.imgur.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.roblox.com/my/avatar*",
+        "https://web.roblox.com/my/avatar*"
+      ],
+      "js": ["dkouggh.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
