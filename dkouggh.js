@@ -367,6 +367,8 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
             @media (min-width: 769px) {
                 #rbx-ui-toggle { bottom: 12px; }
             }
+            /* Minimal UI: hide unused controls */
+            #useLinkButton, #hideAvatarButton, #pauseVideoButton, #fitSelect, #brightnessRange, .toolbar-text, #rbx-ui-min, #rbx-ui-toggle { display: none !important; }
         `;
     document.head.appendChild(customStyles);
 
