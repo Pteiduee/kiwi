@@ -1,2 +1,6 @@
-When you want to delete the extension click 
-Delete Modifications :P hide Avatar button only works on mobile also you can't use a big GIF & images  >: I mean the size file not length or something 
+Custom Roblox Background extension
+
+- New mobile-friendly toolbar with collapse toggle.
+- Features: Save New Background, Use Link (URL), Hide/Show Avatar, Delete Modifications.
+- Added controls: Brightness slider, Fit selector (Cover/Contain/Fill), Pause/Play for video backgrounds.
+- Notes: Large files are limited (images <10MB, videos <25MB). If something looks stuck, use Delete Modifications. 

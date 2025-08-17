@@ -83,6 +83,45 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
       if (legacyVideoCss) legacyVideoCss.remove();
     };
 
+    // New helpers to apply visual settings on media
+    const getBackgroundMediaElement = () => document.getElementById('rbx-bgvideo') || document.getElementById('rbx-bgimage');
+
+    async function applyVisualSettings() {
+      try {
+        const storedFit = (await storageGet("backgroundObjectFit")) || "cover";
+        const storedBrightnessStr = await storageGet("backgroundBrightness");
+        const storedBrightness = storedBrightnessStr ? parseFloat(storedBrightnessStr) : 1;
+
+        const mediaEl = getBackgroundMediaElement();
+        if (mediaEl) {
+          mediaEl.style.objectFit = storedFit;
+          mediaEl.style.filter = `brightness(${isFinite(storedBrightness) ? storedBrightness : 1})`;
+        }
+
+        // Fallback mapping for CSS background case
+        const bgContainer = document.querySelector('.avatar-back') || document.querySelector('.avatar-upsell .content');
+        if (bgContainer && bgContainer.style && bgContainer.style.backgroundImage) {
+          let bgSizeValue = "cover";
+          if (storedFit === "contain") bgSizeValue = "contain";
+          else if (storedFit === "fill") bgSizeValue = "100% 100%";
+          bgContainer.style.backgroundSize = bgSizeValue;
+        }
+      } catch {}
+    }
+
+    async function applyVideoPausedState(pauseButtonEl) {
+      const paused = await storageGet("videoPaused");
+      const videoEl = document.getElementById("rbx-bgvideo");
+      if (!videoEl) return;
+      if (paused === "true") {
+        try { videoEl.pause(); } catch {}
+        if (pauseButtonEl) pauseButtonEl.textContent = "Play Video";
+      } else {
+        if (typeof videoEl.play === "function") { videoEl.play().catch(() => {}); }
+        if (pauseButtonEl) pauseButtonEl.textContent = "Pause Video";
+      }
+    }
+
     const restoreDefaultBackground = () => {
       const targets = [];
       const back = document.querySelector('.avatar-back');
@@ -121,6 +160,8 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
         }
         imgEl.src = dataUrl;
         container.prepend(imgEl);
+        // Apply current visual settings on next tick
+        setTimeout(() => { applyVisualSettings(); }, 0);
         return;
       }
 
@@ -152,6 +193,8 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
                             pointer-events: none !important;
                         }`;
       document.head.appendChild(newStyle);
+      // Apply settings even in fallback case
+      setTimeout(() => { applyVisualSettings(); }, 0);
     };
 
     const preloadImage = (src) => new Promise((resolve, reject) => {
@@ -193,6 +236,8 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
         if (typeof video.play === 'function') {
           video.play().catch(() => {});
         }
+        // Apply visual settings and paused state after insertion
+        setTimeout(() => { applyVisualSettings(); applyVideoPausedState(); }, 0);
         return true;
       };
 
@@ -266,6 +311,64 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
             .custom-file-label:active {
                 background-color: #495057;
             }
+            .custom-select {
+                padding: 6px 10px;
+                border-radius: 6px;
+                border: 1px solid rgba(255,255,255,.2);
+                background: #2b2b2b;
+                color: #fff;
+                font-size: 12px;
+            }
+            .custom-range {
+                width: 140px;
+                accent-color: #007bff;
+            }
+            .toolbar-text {
+                color: #fff;
+                font-size: 12px;
+                opacity: .85;
+            }
+            /* Mobile toolbar improvements */
+            @media (max-width: 768px) {
+                .custom-file-upload {
+                    position: fixed;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    margin: 0;
+                    padding: 8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+                    background: rgba(28,28,30,.95);
+                    backdrop-filter: saturate(1.1) blur(6px);
+                    z-index: 2147483647;
+                    overflow-x: auto;
+                    flex-wrap: nowrap;
+                }
+                .custom-file-upload .custom-button,
+                .custom-file-upload .custom-file-label,
+                .custom-file-upload .custom-select {
+                    flex: 0 0 auto;
+                }
+                .custom-range { width: 120px; }
+            }
+            #rbx-ui-toggle {
+                position: fixed;
+                right: 12px;
+                bottom: calc(68px + env(safe-area-inset-bottom));
+                z-index: 2147483647;
+                background-color: #007bff;
+                color: #fff;
+                border: none;
+                border-radius: 20px;
+                padding: 10px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                box-shadow: 0 2px 6px rgba(0,0,0,.25);
+            }
+            @media (min-width: 769px) {
+                #rbx-ui-toggle { bottom: 12px; }
+            }
+            /* Minimal UI: hide unused controls */
+            #useLinkButton, #hideAvatarButton, #pauseVideoButton, #fitSelect, #brightnessRange, .toolbar-text, #rbx-ui-min, #rbx-ui-toggle { display: none !important; }
         `;
     document.head.appendChild(customStyles);
 
@@ -305,17 +408,98 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
     deleteButton.textContent = "Delete Modifications";
     deleteButton.className = "custom-button";
 
+    // New controls: object-fit selector, brightness slider, video pause button
+    const fitSelect = document.createElement("select");
+    fitSelect.id = "fitSelect";
+    fitSelect.className = "custom-select";
+    [
+      { v: 'cover', t: 'Fit: Cover' },
+      { v: 'contain', t: 'Fit: Contain' },
+      { v: 'fill', t: 'Fit: Fill' }
+    ].forEach(({ v, t }) => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = t; fitSelect.appendChild(opt);
+    });
+
+    const brightnessText = document.createElement('span');
+    brightnessText.className = 'toolbar-text';
+    brightnessText.textContent = 'Brightness';
+
+    const brightnessRange = document.createElement("input");
+    brightnessRange.type = "range";
+    brightnessRange.min = "0.3";
+    brightnessRange.max = "1.5";
+    brightnessRange.step = "0.01";
+    brightnessRange.value = "1";
+    brightnessRange.id = "brightnessRange";
+    brightnessRange.className = "custom-range";
+
+    const pauseButton = document.createElement("button");
+    pauseButton.id = "pauseVideoButton";
+    pauseButton.textContent = "Pause Video";
+    pauseButton.className = "custom-button";
+    pauseButton.style.display = "none";
+
     container.appendChild(label);
     container.appendChild(fileInput);
     container.appendChild(saveButton);
     container.appendChild(linkButton);
     container.appendChild(hideButton);
     container.appendChild(deleteButton); // إضافة الزر الجديد
+    container.appendChild(fitSelect);
+    container.appendChild(brightnessText);
+    container.appendChild(brightnessRange);
+    container.appendChild(pauseButton);
+
+    const minimizeBtn = document.createElement('button');
+    minimizeBtn.id = 'rbx-ui-min';
+    minimizeBtn.textContent = 'Hide Toolbar';
+    minimizeBtn.className = 'custom-button';
+    container.appendChild(minimizeBtn);
+
     document.body.appendChild(container);
+
+    // Floating toggle button for collapsing/expanding toolbar (mobile-friendly)
+    const toolbarToggle = document.createElement('button');
+    toolbarToggle.id = 'rbx-ui-toggle';
+    toolbarToggle.textContent = 'Toolbar';
+    document.body.appendChild(toolbarToggle);
+
+    minimizeBtn.addEventListener('click', async () => {
+      container.style.display = 'none';
+      toolbarToggle.style.display = '';
+      await storageSet('uiCollapsed', 'true');
+    });
 
     // عند اختيار ملف، قم بتحديث اسم الملف المعروض
     fileInput.addEventListener('change', function() {
       label.textContent = this.files[0] ? this.files[0].name : "Choose File";
+    });
+
+    // Initialize control values from storage
+    (async () => {
+      const savedFit = (await storageGet("backgroundObjectFit")) || 'cover';
+      fitSelect.value = savedFit;
+      const savedBrightnessStr = await storageGet("backgroundBrightness");
+      const savedBrightness = savedBrightnessStr ? parseFloat(savedBrightnessStr) : 1;
+      if (isFinite(savedBrightness)) brightnessRange.value = String(savedBrightness);
+      await applyVisualSettings();
+      const bgType = await storageGet('backgroundType');
+      pauseButton.style.display = bgType === 'video' ? '' : 'none';
+      const collapsed = await storageGet('uiCollapsed');
+      if (collapsed === 'true') {
+        container.style.display = 'none';
+        toolbarToggle.style.display = '';
+      } else {
+        toolbarToggle.style.display = 'none';
+      }
+    })();
+
+    toolbarToggle.addEventListener('click', async () => {
+      const isHidden = container.style.display === 'none';
+      container.style.display = isHidden ? '' : 'none';
+      toolbarToggle.style.display = isHidden ? 'none' : '';
+      await storageSet('uiCollapsed', isHidden ? 'false' : 'true');
     });
 
     // عند النقر على زر الحفظ
@@ -346,14 +530,17 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
             applyVideoBackground(dataUrl);
             await storageSet("background", dataUrl);
             await storageSet("backgroundType", "video");
+            setTimeout(() => { pauseButton.style.display = ''; applyVideoPausedState(pauseButton); }, 0);
           } else {
             applyImageBackground(dataUrl);
             await storageSet("background", dataUrl);
             await storageSet("backgroundType", "image");
+            pauseButton.style.display = 'none';
           }
 
           fileInput.value = '';
           label.textContent = "Choose File";
+          setTimeout(() => { applyVisualSettings(); }, 0);
         };
         reader.readAsDataURL(file);
       } else {
@@ -404,11 +591,14 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
           applyVideoBackground(trimmed);
           await storageSet("background", trimmed);
           await storageSet("backgroundType", "video");
+          setTimeout(() => { pauseButton.style.display = ''; applyVideoPausedState(pauseButton); }, 0);
         } else {
           applyImageBackground(trimmed);
           await storageSet("background", trimmed);
           await storageSet("backgroundType", "image");
+          pauseButton.style.display = 'none';
         }
+        setTimeout(() => { applyVisualSettings(); }, 0);
         return;
       }
 
@@ -433,11 +623,14 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
         applyVideoBackground(dataUrl);
         await storageSet("background", dataUrl);
         await storageSet("backgroundType", "video");
+        setTimeout(() => { pauseButton.style.display = ''; applyVideoPausedState(pauseButton); }, 0);
       } else {
         applyImageBackground(dataUrl);
         await storageSet("background", dataUrl);
         await storageSet("backgroundType", "image");
+        pauseButton.style.display = 'none';
       }
+      setTimeout(() => { applyVisualSettings(); }, 0);
     });
 
     // عند النقر على زر إخفاء الصورة
@@ -453,6 +646,34 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
           hideButton.textContent = "Show Avatar";
           await storageSet("hideAvatar", "true");
         }
+      }
+    });
+
+    // Brightness control events
+    brightnessRange.addEventListener('input', async () => {
+      const val = parseFloat(brightnessRange.value);
+      await storageSet('backgroundBrightness', String(val));
+      applyVisualSettings();
+    });
+
+    // Fit selector events
+    fitSelect.addEventListener('change', async () => {
+      await storageSet('backgroundObjectFit', fitSelect.value);
+      applyVisualSettings();
+    });
+
+    // Pause/play video toggle
+    pauseButton.addEventListener('click', async () => {
+      const video = document.getElementById('rbx-bgvideo');
+      if (!video) return;
+      if (video.paused) {
+        try { await video.play(); } catch {}
+        pauseButton.textContent = 'Pause Video';
+        await storageSet('videoPaused', 'false');
+      } else {
+        try { video.pause(); } catch {}
+        pauseButton.textContent = 'Play Video';
+        await storageSet('videoPaused', 'true');
       }
     });
 
@@ -491,12 +712,23 @@ if (site.includes("https://www.roblox.com/my/avatar") || site.includes("https://
       await storageRemove("background");
       await storageRemove("backgroundType");
       await storageRemove("hideAvatar");
+      await storageRemove("backgroundBrightness");
+      await storageRemove("backgroundObjectFit");
+      await storageRemove("videoPaused");
 
       // إعادة العناصر المرئية إلى حالتها الأصلية
       const avatarImg = findAvatarImg();
       if (avatarImg) {
         avatarImg.style.display = "";
       }
+
+      // Reset UI controls
+      brightnessRange.value = '1';
+      fitSelect.value = 'cover';
+      pauseButton.style.display = 'none';
+      toolbarToggle.style.display = 'none';
+      container.style.display = '';
+      await storageSet('uiCollapsed', 'false');
 
       // إعادة تعيين نص زر "Hide Avatar"
       hideButton.textContent = "Hide Avatar";
